@@ -1,0 +1,2046 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>WavePulse Studio</title>
+  <meta name="description" content="진짜 음악 파형을 타고 달리는 차세대 웹 리듬 액션 게임 WavePulse Studio" />
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js"></script>
+  <style>
+    * {
+      font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, "Helvetica Neue", "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    :root { color-scheme: dark; }
+    body {
+      background-color: #030712;
+      color: #f3f4f6;
+      overflow-x: hidden;
+    }
+    @keyframes pulseGlow {
+      0%, 100% { opacity: 0.3; transform: scale(1); }
+      50% { opacity: 0.7; transform: scale(1.04); }
+    }
+    .pulse-bg {
+      animation: pulseGlow 4s ease-in-out infinite;
+    }
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #090d16;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #1f293d;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #374151;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen selection:bg-cyan-500 selection:text-black">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useCallback, useMemo } = React;
+
+    // ==========================================
+    // 1. 다국어 사전 (i18n Dictionary)
+    // ==========================================
+    const TEXT = {
+      kr: {
+        brand: { title: "WAVEPULSE", badge: "STUDIO", subtitle: "실시간 오디오 분석 & 파형 리듬 게임" },
+        nav: { krBtn: "🇰🇷 한국어", enBtn: "🇺🇸 English" },
+        modes: {
+          surfer: { name: "사운드 서퍼", desc: "음원 파형 위를 파도타듯 질주하는 웨이브 레이싱" },
+          analog: { name: "아날로그 펄스", desc: "좌우에서 좁혀지는 비트 라인 판정 모드" },
+          beatdash: { name: "비트 대시", desc: "고속 상하 2라인 즉각 반응형 점프 대시" },
+          tiles: { name: "매직 타일", desc: "4레인 클래식 피아노 타일 낙하 모드" }
+        },
+        difficulty: {
+          easy: "쉬움",
+          normal: "보통",
+          hard: "어려움",
+          expert: "전문가"
+        },
+        settings: {
+          title: "오디오 & 게임 설정",
+          syncLabel: "판정 싱크 오프셋",
+          syncUnit: "ms",
+          syncReset: "0ms 리셋",
+          syncNotice: "소리가 늦게 들리면(블루투스 이어폰 등) +, 빠르게 들리면 -",
+          sfxLabel: "타격 효과음(클릭 SFX)",
+          sfxOn: "켜짐",
+          sfxOff: "꺼짐",
+          difficultyLabel: "난이도 선택"
+        },
+        library: {
+          title: "뮤직 트랙 보관함",
+          customBtn: "내 MP3 / WAV 파일 열기",
+          customLoading: "오디오 디코딩 및 온셋 분석 중...",
+          customTip: "내 음악 파일을 넣으면 BPM과 비트를 자동 분석하여 게임 채보가 즉시 생성됩니다.",
+          bpm: "BPM",
+          duration: "초",
+          playBtn: "플레이"
+        },
+        controls: {
+          surferHelp: "W / S 키 또는 드래그 / 터치",
+          analogHelp: "A(왼쪽) / D(오른쪽) 또는 좌우 터치",
+          beatdashHelp: "W/↑(상단) | S/↓(하단) 또는 상하 레인 터치",
+          tilesHelp: "D / F / J / K 또는 4개 레인 직접 터치",
+          startIdle: "아래 버튼이나 화면을 눌러 게임 시작"
+        },
+        hud: {
+          score: "SCORE",
+          combo: "COMBO",
+          accuracy: "ACCURACY",
+          ready: "READY",
+          start: "START!"
+        },
+        judgments: {
+          perfect: "PERFECT",
+          good: "GOOD",
+          miss: "MISS"
+        },
+        result: {
+          cleared: "STAGE CLEAR!",
+          gameover: "GAME OVER",
+          grade: "RANK",
+          finalScore: "최종 점수",
+          maxCombo: "최고 콤보",
+          accuracy: "정확도",
+          perfectCount: "퍼펙트",
+          goodCount: "굿",
+          missCount: "미스",
+          retryBtn: "다시 하기",
+          menuBtn: "곡 선택으로"
+        },
+        footer: {
+          info: "WavePulse 오디오 엔진: 저지연 AudioContext 정밀 클록 동기화",
+          copyright: "© WavePulse Studio. All rights reserved."
+        }
+      },
+      en: {
+        brand: { title: "WAVEPULSE", badge: "STUDIO", subtitle: "Real-time Audio Waveform & Rhythm Action" },
+        nav: { krBtn: "🇰🇷 한국어", enBtn: "🇺🇸 English" },
+        modes: {
+          surfer: { name: "Sound Surfer", desc: "Ride the actual audio waveform in high-speed wave racing" },
+          analog: { name: "Analog Pulse", desc: "Dual inward pulse lines approaching the beat line" },
+          beatdash: { name: "Beat Dash", desc: "High-speed 2-line vertical jump dash reflex mode" },
+          tiles: { name: "Magic Tiles", desc: "4-lane classic vertical waterfall piano tiles" }
+        },
+        difficulty: {
+          easy: "EASY",
+          normal: "NORMAL",
+          hard: "HARD",
+          expert: "EXPERT"
+        },
+        settings: {
+          title: "Audio & Game Settings",
+          syncLabel: "Judgment Sync Offset",
+          syncUnit: "ms",
+          syncReset: "Reset (0ms)",
+          syncNotice: "Use (+) if audio sounds late (e.g. Bluetooth), (-) if early",
+          sfxLabel: "Hit Sound (Click SFX)",
+          sfxOn: "ON",
+          sfxOff: "OFF",
+          difficultyLabel: "Select Difficulty"
+        },
+        library: {
+          title: "Track Library",
+          customBtn: "Load Custom MP3 / WAV",
+          customLoading: "Decoding & analyzing onsets...",
+          customTip: "Upload your own audio file to auto-generate beat charts via on-the-fly onset detection.",
+          bpm: "BPM",
+          duration: "sec",
+          playBtn: "PLAY"
+        },
+        controls: {
+          surferHelp: "W / S keys or Mouse Drag / Touch",
+          analogHelp: "A (Left) / D (Right) or Left/Right screen tap",
+          beatdashHelp: "W/↑ (Top) | S/↓ (Bottom) or Lane touch",
+          tilesHelp: "D / F / J / K keys or 4-lane direct touch",
+          startIdle: "Click here or tap screen to start"
+        },
+        hud: {
+          score: "SCORE",
+          combo: "COMBO",
+          accuracy: "ACCURACY",
+          ready: "READY",
+          start: "START!"
+        },
+        judgments: {
+          perfect: "PERFECT",
+          good: "GOOD",
+          miss: "MISS"
+        },
+        result: {
+          cleared: "STAGE CLEAR!",
+          gameover: "GAME OVER",
+          grade: "RANK",
+          finalScore: "Final Score",
+          maxCombo: "Max Combo",
+          accuracy: "Accuracy",
+          perfectCount: "Perfect",
+          goodCount: "Good",
+          missCount: "Miss",
+          retryBtn: "Play Again",
+          menuBtn: "Song Menu"
+        },
+        footer: {
+          info: "WavePulse Engine: Ultra-low latency AudioContext.currentTime zero-drift clock",
+          copyright: "© WavePulse Studio. All rights reserved."
+        }
+      }
+    };
+
+    // ==========================================
+    // 2. 원래 내 곡 메타데이터 (가사 빈 배열)
+    // ==========================================
+    const PRESET_SONGS = [
+      {
+        id: "fade_out",
+        title: "Fade Out (Break The Loop)",
+        titleEn: "Fade Out (Break The Loop)",
+        artist: "WavePulse Studio",
+        bpm: 124,
+        audioUrl: "/songs/fade_out.mp3",
+        duration: 0,
+        lyrics: []
+      },
+      {
+        id: "sweet_anesthetic",
+        title: "Sweet Anesthetic (월요병 마취제)",
+        titleEn: "Sweet Anesthetic",
+        artist: "WavePulse Studio",
+        bpm: 118,
+        audioUrl: "/songs/sweet_anesthetic.mp3",
+        duration: 0,
+        lyrics: []
+      },
+      {
+        id: "our_temperature",
+        title: "우리의 온도",
+        titleEn: "Our Temperature",
+        artist: "WavePulse Studio",
+        bpm: 96,
+        audioUrl: "/songs/our_temperature.mp3",
+        duration: 0,
+        lyrics: []
+      },
+      {
+        id: "burn_and_block",
+        title: "지독하게",
+        titleEn: "Burn & Block",
+        artist: "WavePulse Studio",
+        bpm: 130,
+        audioUrl: "/songs/burn_and_block.mp3",
+        duration: 0,
+        lyrics: []
+      }
+    ];
+
+    // ==========================================
+    // 3. Web Audio 엔진 & 단일 활성 버퍼 관리자
+    // ==========================================
+    let sharedAudioContext = null;
+    let activeTrackSource = null;
+    let trackStartTime = 0;
+
+    // 단일 디코딩 오디오 버퍼 (현재 재생 곡 1개만 메모리에 유지)
+    let currentDecodedBuffer = null;
+    let currentDecodedSongId = null;
+
+    function getAudioContext() {
+      if (!sharedAudioContext) {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        sharedAudioContext = new AudioCtx();
+      }
+      if (sharedAudioContext.state === 'suspended') {
+        sharedAudioContext.resume();
+      }
+      return sharedAudioContext;
+    }
+
+    function triggerHaptic(duration = 25) {
+      if (typeof navigator !== 'undefined' && navigator.vibrate) {
+        try { navigator.vibrate(duration); } catch (e) {}
+      }
+    }
+
+    function playClickSfx(isPerfect = true) {
+      const ctx = getAudioContext();
+      if (!ctx) return;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = isPerfect ? 'triangle' : 'sine';
+      osc.frequency.setValueAtTime(isPerfect ? 1800 : 900, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(120, ctx.currentTime + 0.04);
+
+      const vol = isPerfect ? 0.35 : 0.2;
+      gain.gain.setValueAtTime(vol, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.045);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.05);
+    }
+
+    function playGameOverSound() {
+      const ctx = getAudioContext();
+      if (!ctx) return;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(260, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(50, ctx.currentTime + 0.35);
+      gain.gain.setValueAtTime(0.35, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.45);
+    }
+
+    function stopMusicTrack() {
+      if (activeTrackSource) {
+        try {
+          activeTrackSource.stop();
+          activeTrackSource.disconnect();
+        } catch (e) {}
+        activeTrackSource = null;
+      }
+    }
+
+    function startMusicTrack(buffer, whenToStart = 0) {
+      stopMusicTrack();
+      const ctx = getAudioContext();
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(ctx.destination);
+
+      const playAt = whenToStart > 0 ? whenToStart : ctx.currentTime;
+      source.start(playAt);
+      activeTrackSource = source;
+      trackStartTime = playAt;
+      return playAt;
+    }
+
+    function createSeededRandom(seedStr) {
+      let h = 2166136261 >>> 0;
+      for (let i = 0; i < seedStr.length; i++) {
+        h = Math.imul(h ^ seedStr.charCodeAt(i), 16777619) >>> 0;
+      }
+      return function() {
+        h ^= h << 13;
+        h ^= h >>> 17;
+        h ^= h << 5;
+        return (h >>> 0) / 4294967296;
+      };
+    }
+
+    // 폴백용 오프라인 멀티트랙 전자음 생성기
+    function synthesizeFallbackTrackBuffer(bpm, duration = 30) {
+      const sampleRate = 44100;
+      const ctx = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(2, sampleRate * duration, sampleRate);
+      const beatLen = 60 / bpm;
+      const totalBeats = Math.floor(duration / beatLen);
+
+      for (let b = 0; b < totalBeats; b++) {
+        const t = b * beatLen;
+
+        const kickOsc = ctx.createOscillator();
+        const kickGain = ctx.createGain();
+        kickOsc.frequency.setValueAtTime(140, t);
+        kickOsc.frequency.exponentialRampToValueAtTime(38, t + 0.12);
+        kickGain.gain.setValueAtTime(0.7, t);
+        kickGain.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+        kickOsc.connect(kickGain);
+        kickGain.connect(ctx.destination);
+        kickOsc.start(t);
+        kickOsc.stop(t + 0.2);
+
+        if (b % 2 === 1) {
+          const snareOsc = ctx.createOscillator();
+          const snareGain = ctx.createGain();
+          snareOsc.type = 'triangle';
+          snareOsc.frequency.setValueAtTime(240, t);
+          snareOsc.frequency.exponentialRampToValueAtTime(90, t + 0.1);
+          snareGain.gain.setValueAtTime(0.4, t);
+          snareGain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+          snareOsc.connect(snareGain);
+          snareGain.connect(ctx.destination);
+          snareOsc.start(t);
+          snareOsc.stop(t + 0.16);
+        }
+
+        const hatOsc = ctx.createOscillator();
+        const hatGain = ctx.createGain();
+        hatOsc.type = 'square';
+        hatOsc.frequency.setValueAtTime(7000, t + beatLen * 0.5);
+        hatGain.gain.setValueAtTime(0.12, t + beatLen * 0.5);
+        hatGain.gain.exponentialRampToValueAtTime(0.001, t + beatLen * 0.5 + 0.04);
+        hatOsc.connect(hatGain);
+        hatGain.connect(ctx.destination);
+        hatOsc.start(t + beatLen * 0.5);
+        hatOsc.stop(t + beatLen * 0.5 + 0.05);
+
+        const notes = [261.63, 329.63, 392.00, 523.25, 440.00, 349.23];
+        const freq = notes[b % notes.length];
+        const synthOsc = ctx.createOscillator();
+        const synthGain = ctx.createGain();
+        synthOsc.type = 'sawtooth';
+        synthOsc.frequency.setValueAtTime(freq, t);
+        synthGain.gain.setValueAtTime(0.18, t);
+        synthGain.gain.exponentialRampToValueAtTime(0.001, t + beatLen * 0.85);
+        synthOsc.connect(synthGain);
+        synthGain.connect(ctx.destination);
+        synthOsc.start(t);
+        synthOsc.stop(t + beatLen);
+      }
+
+      return ctx.startRendering();
+    }
+
+    async function loadCurrentTrackBuffer(song) {
+      if (currentDecodedSongId === song.id && currentDecodedBuffer) {
+        return currentDecodedBuffer;
+      }
+
+      const audioCtx = getAudioContext();
+      currentDecodedBuffer = null;
+      currentDecodedSongId = null;
+
+      try {
+        if (song.audioUrl && song.audioUrl.startsWith('/songs/')) {
+          const res = await fetch(song.audioUrl);
+          if (res.ok) {
+            const arrayBuffer = await res.arrayBuffer();
+            const decoded = await audioCtx.decodeAudioData(arrayBuffer);
+            currentDecodedBuffer = decoded;
+            currentDecodedSongId = song.id;
+            return decoded;
+          }
+        }
+      } catch (err) {
+        console.warn("Real audio URL not reachable, falling back to synthesized track:", err);
+      }
+
+      const fallback = await synthesizeFallbackTrackBuffer(song.bpm || 120, 30);
+      currentDecodedBuffer = fallback;
+      currentDecodedSongId = song.id;
+      return fallback;
+    }
+
+    const DIFFICULTY_SETTINGS = {
+      easy:   { minInterval: 0.45, thresholdMul: 1.6, dropMinInterval: 0.35 },
+      normal: { minInterval: 0.30, thresholdMul: 1.3, dropMinInterval: 0.22 },
+      hard:   { minInterval: 0.20, thresholdMul: 1.05, dropMinInterval: 0.15 },
+      expert: { minInterval: 0.14, thresholdMul: 0.88, dropMinInterval: 0.10 }
+    };
+
+    function analyzeAudioAndGenerateNotes(audioBuffer, songId, difficulty = 'normal') {
+      const channelData = audioBuffer.getChannelData(0);
+      const sampleRate = audioBuffer.sampleRate;
+      const windowSize = Math.floor(sampleRate * 0.04);
+      const totalWindows = Math.floor(channelData.length / windowSize);
+
+      const energies = new Float32Array(totalWindows);
+      let totalEnergy = 0;
+
+      for (let i = 0; i < totalWindows; i++) {
+        let sum = 0;
+        const offset = i * windowSize;
+        for (let j = 0; j < windowSize; j++) {
+          const val = channelData[offset + j];
+          sum += val * val;
+        }
+        energies[i] = sum;
+        totalEnergy += sum;
+      }
+
+      const avgEnergy = totalEnergy / totalWindows;
+      const diffConfig = DIFFICULTY_SETTINGS[difficulty] || DIFFICULTY_SETTINGS.normal;
+      const threshold = avgEnergy * diffConfig.thresholdMul;
+
+      const random = createSeededRandom(songId || "wavepulse_chart");
+      const generatedNotes = [];
+      let lastTime = 0.5;
+
+      for (let i = 1; i < totalWindows - 1; i++) {
+        const time = (i * windowSize) / sampleRate;
+        const energy = energies[i];
+        const isOnset = energy > threshold && energy > energies[i - 1] && energy >= energies[i + 1];
+
+        const isDropZone = energy > threshold * 1.8;
+        const currentMinInterval = isDropZone ? diffConfig.dropMinInterval : diffConfig.minInterval;
+
+        if (isOnset && (time - lastTime) >= currentMinInterval) {
+          const lane = Math.floor(random() * 4);
+          generatedNotes.push({
+            id: `auto_${generatedNotes.length}`,
+            time: Math.round(time * 1000) / 1000,
+            lane: lane,
+            hit: false
+          });
+          lastTime = time;
+        }
+      }
+
+      return generatedNotes;
+    }
+
+    function extractWaveformPeaks(audioBuffer, totalPoints = 300) {
+      const channelData = audioBuffer.getChannelData(0);
+      const blockSize = Math.floor(channelData.length / totalPoints);
+      const peaks = new Float32Array(totalPoints);
+
+      for (let i = 0; i < totalPoints; i++) {
+        let max = 0;
+        const start = i * blockSize;
+        for (let j = 0; j < blockSize; j++) {
+          const val = Math.abs(channelData[start + j]);
+          if (val > max) max = val;
+        }
+        peaks[i] = max;
+      }
+      return peaks;
+    }
+
+    function calculateGrade(accuracy) {
+      if (accuracy >= 95) return 'S';
+      if (accuracy >= 85) return 'A';
+      if (accuracy >= 70) return 'B';
+      return 'C';
+    }
+
+    // ==========================================
+    // 4. 모드 1: 사운드 서퍼 (Sound Surfer)
+    // ==========================================
+    function SoundSurferMode({ song, chartNotes, audioBuffer, waveformPeaks, language, syncOffset, sfxEnabled, onBackToMenu }) {
+      const t = TEXT[language];
+      const canvasRef = useRef(null);
+      const countdownTimerRef = useRef(null);
+      const animFrameRef = useRef(null);
+
+      const [gameState, setGameState] = useState('idle');
+      const [countdown, setCountdown] = useState(3);
+      const [stats, setStats] = useState({ score: 0, combo: 0, maxCombo: 0, perfect: 0, good: 0, miss: 0 });
+      const [judgment, setJudgment] = useState(null);
+      const [playerY, setPlayerY] = useState(0.5);
+
+      const notesRef = useRef([]);
+      const playerYRef = useRef(0.5);
+      const startTimeRef = useRef(0);
+      const statsRef = useRef({ score: 0, combo: 0, maxCombo: 0, perfect: 0, good: 0, miss: 0 });
+
+      useEffect(() => {
+        notesRef.current = chartNotes.map(n => ({ ...n, hit: false }));
+      }, [chartNotes]);
+
+      useEffect(() => {
+        return () => {
+          if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
+          if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+          stopMusicTrack();
+        };
+      }, []);
+
+      const startGame = useCallback(() => {
+        if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
+        if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+        stopMusicTrack();
+
+        notesRef.current = chartNotes.map(n => ({ ...n, hit: false }));
+        statsRef.current = { score: 0, combo: 0, maxCombo: 0, perfect: 0, good: 0, miss: 0 };
+        setStats(statsRef.current);
+        setJudgment(null);
+        setPlayerY(0.5);
+        playerYRef.current = 0.5;
+
+        const ctx = getAudioContext();
+        setGameState('countdown');
+        setCountdown(3);
+
+        let count = 3;
+        const musicStartWhen = ctx.currentTime + 2.1;
+        startTimeRef.current = musicStartWhen;
+        startMusicTrack(audioBuffer, musicStartWhen);
+
+        countdownTimerRef.current = setInterval(() => {
+          count--;
+          if (count > 0) {
+            setCountdown(count);
+          } else {
+            clearInterval(countdownTimerRef.current);
+            countdownTimerRef.current = null;
+            setGameState('playing');
+          }
+        }, 700);
+      }, [chartNotes, audioBuffer]);
+
+      useEffect(() => {
+        const handleKeyDown = (e) => {
+          if (e.key === 'w' || e.key === 'ArrowUp') {
+            playerYRef.current = Math.max(0.15, playerYRef.current - 0.12);
+            setPlayerY(playerYRef.current);
+          } else if (e.key === 's' || e.key === 'ArrowDown') {
+            playerYRef.current = Math.min(0.85, playerYRef.current + 0.12);
+            setPlayerY(playerYRef.current);
+          }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+      }, []);
+
+      const handlePointerMove = (e) => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const rect = canvas.getBoundingClientRect();
+        const clientY = e.clientY || (e.touches && e.touches[0] ? e.touches[0].clientY : rect.top + rect.height * 0.5);
+        const normY = Math.max(0.15, Math.min(0.85, (clientY - rect.top) / rect.height));
+        playerYRef.current = normY;
+        setPlayerY(normY);
+      };
+
+      useEffect(() => {
+        if (gameState !== 'playing' && gameState !== 'countdown') return;
+
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx2d = canvas.getContext('2d');
+        const audioCtx = getAudioContext();
+        const totalSongDuration = audioBuffer ? audioBuffer.duration : (song.duration || 30);
+
+        const renderLoop = () => {
+          const rawElapsed = audioCtx.currentTime - startTimeRef.current;
+          const currentElapsed = rawElapsed - (syncOffset / 1000);
+
+          const w = canvas.width;
+          const h = canvas.height;
+
+          ctx2d.clearRect(0, 0, w, h);
+
+          ctx2d.strokeStyle = 'rgba(30, 41, 59, 0.4)';
+          ctx2d.lineWidth = 1;
+          for (let y = 0; y < h; y += 40) {
+            ctx2d.beginPath();
+            ctx2d.moveTo(0, y);
+            ctx2d.lineTo(w, y);
+            ctx2d.stroke();
+          }
+
+          ctx2d.beginPath();
+          ctx2d.lineWidth = 3;
+          ctx2d.strokeStyle = '#06b6d4';
+          const peakCount = waveformPeaks.length;
+          const points = 120;
+
+          for (let i = 0; i <= points; i++) {
+            const x = (i / points) * w;
+            const timeSample = Math.max(0, currentElapsed + (i / points) * 3);
+            const peakIdx = Math.floor((timeSample / totalSongDuration) * peakCount) % peakCount;
+            const amp = waveformPeaks[peakIdx] || 0.2;
+            const y = h * 0.5 + Math.sin(timeSample * 3.5 + i * 0.15) * (amp * h * 0.35);
+
+            if (i === 0) ctx2d.moveTo(x, y);
+            else ctx2d.lineTo(x, y);
+          }
+          ctx2d.stroke();
+
+          const playerScreenX = w * 0.22;
+          const playerScreenY = playerYRef.current * h;
+
+          ctx2d.shadowBlur = 16;
+          ctx2d.shadowColor = '#06b6d4';
+          ctx2d.fillStyle = '#38bdf8';
+          ctx2d.beginPath();
+          ctx2d.arc(playerScreenX, playerScreenY, 12, 0, Math.PI * 2);
+          ctx2d.fill();
+          ctx2d.shadowBlur = 0;
+
+          ctx2d.strokeStyle = 'rgba(56, 189, 248, 0.5)';
+          ctx2d.lineWidth = 4;
+          ctx2d.beginPath();
+          ctx2d.moveTo(playerScreenX - 30, playerScreenY);
+          ctx2d.lineTo(playerScreenX, playerScreenY);
+          ctx2d.stroke();
+
+          const leadTime = 1.8;
+          const notes = notesRef.current;
+
+          for (let i = 0; i < notes.length; i++) {
+            const note = notes[i];
+            if (note.hit) continue;
+
+            const timeDiff = note.time - currentElapsed;
+            const noteX = playerScreenX + (timeDiff / leadTime) * (w - playerScreenX);
+            const noteY = (0.2 + (note.lane / 3) * 0.6) * h;
+
+            if (noteX > -20 && noteX < w + 20) {
+              ctx2d.shadowBlur = 12;
+              ctx2d.shadowColor = '#f43f5e';
+              ctx2d.fillStyle = '#fb7185';
+              ctx2d.beginPath();
+              ctx2d.arc(noteX, noteY, 10, 0, Math.PI * 2);
+              ctx2d.fill();
+              ctx2d.shadowBlur = 0;
+            }
+
+            if (gameState === 'playing') {
+              if (Math.abs(timeDiff) < 0.12 && Math.abs(playerScreenY - noteY) < 36) {
+                note.hit = true;
+                const isPerfect = Math.abs(timeDiff) < 0.05;
+                if (sfxEnabled) playClickSfx(isPerfect);
+                triggerHaptic(isPerfect ? 30 : 15);
+
+                const addScore = isPerfect ? 1000 : 600;
+                statsRef.current.score += addScore;
+                statsRef.current.combo++;
+                if (statsRef.current.combo > statsRef.current.maxCombo) {
+                  statsRef.current.maxCombo = statsRef.current.combo;
+                }
+                if (isPerfect) statsRef.current.perfect++;
+                else statsRef.current.good++;
+
+                setJudgment(isPerfect ? 'PERFECT' : 'GOOD');
+                setStats({ ...statsRef.current });
+              } else if (timeDiff < -0.15 && !note.hit) {
+                note.hit = true;
+                statsRef.current.combo = 0;
+                statsRef.current.miss++;
+                setJudgment('MISS');
+                setStats({ ...statsRef.current });
+              }
+            }
+          }
+
+          if (gameState === 'playing' && currentElapsed > totalSongDuration + 0.5) {
+            stopMusicTrack();
+            setGameState('result');
+            return;
+          }
+
+          animFrameRef.current = requestAnimationFrame(renderLoop);
+        };
+
+        animFrameRef.current = requestAnimationFrame(renderLoop);
+        return () => cancelAnimationFrame(animFrameRef.current);
+      }, [gameState, song, audioBuffer, waveformPeaks, syncOffset, sfxEnabled]);
+
+      const totalJudged = stats.perfect + stats.good + stats.miss;
+      const accuracy = totalJudged > 0 ? Math.round(((stats.perfect + stats.good * 0.6) / totalJudged) * 100) : 100;
+      const rank = calculateGrade(accuracy);
+
+      return (
+        <div className="relative w-full max-w-4xl mx-auto flex flex-col items-center">
+          <div className="w-full flex justify-between items-center px-4 py-2 bg-slate-900/80 border border-slate-800 rounded-t-xl text-sm">
+            <div>
+              <span className="text-slate-400">{t.hud.score}: </span>
+              <span className="font-bold text-cyan-400 text-lg">{stats.score.toLocaleString()}</span>
+            </div>
+            <div>
+              <span className="text-slate-400">{t.hud.combo}: </span>
+              <span className="font-bold text-yellow-400 text-lg">{stats.combo}</span>
+            </div>
+            <div>
+              <span className="text-slate-400">{t.hud.accuracy}: </span>
+              <span className="font-bold text-emerald-400">{accuracy}%</span>
+            </div>
+          </div>
+
+          
+          <div 
+            className="relative w-full h-80 bg-slate-950 border-x border-b border-slate-800 rounded-b-xl overflow-hidden cursor-pointer"
+            style={{ touchAction: 'none' }}
+            onPointerMove={handlePointerMove}
+            onPointerDown={gameState === 'idle' ? startGame : undefined}
+          >
+            <canvas ref={canvasRef} width={800} height={320} className="w-full h-full block" />
+
+            {judgment && gameState === 'playing' && (
+              <div className="absolute top-6 left-1/2 -translate-x-1/2 pointer-events-none">
+                <span className={`text-2xl font-black italic tracking-widest ${
+                  judgment === 'PERFECT' ? 'text-cyan-300 drop-shadow-[0_0_12px_#22d3ee]' :
+                  judgment === 'GOOD' ? 'text-amber-300 drop-shadow-[0_0_10px_#f59e0b]' :
+                  'text-rose-500 drop-shadow-[0_0_10px_#f43f5e]'
+                }`}>
+                  {judgment}
+                </span>
+              </div>
+            )}
+
+            {gameState === 'countdown' && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 backdrop-blur-sm pointer-events-none">
+                <span className="text-7xl font-black text-cyan-400 animate-ping">
+                  {countdown}
+                </span>
+                <span className="mt-4 text-sm font-semibold tracking-widest text-slate-300">{t.hud.ready}</span>
+              </div>
+            )}
+
+            {gameState === 'idle' && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm">
+                <div className="text-cyan-400 text-4xl mb-3">🏄</div>
+                <h3 className="text-xl font-bold text-white mb-2">{t.modes.surfer.name}</h3>
+                <p className="text-slate-400 text-sm mb-5 text-center max-w-sm">{t.modes.surfer.desc}</p>
+                <button
+                  type="button"
+                  className="px-8 py-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-black rounded-full shadow-lg shadow-cyan-500/30 transition transform hover:scale-105"
+                >
+                  {t.library.playBtn}
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="w-full mt-2 flex justify-between items-center text-xs text-slate-400 px-2">
+            <span>🎮 {t.controls.surferHelp}</span>
+            <span>⏱️ Sync: {syncOffset}ms</span>
+          </div>
+
+          {(gameState === 'result' || gameState === 'gameover') && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
+              <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 text-center shadow-2xl">
+                <div className="text-5xl font-black text-cyan-400 mb-2">{rank}</div>
+                <h2 className="text-2xl font-bold text-white mb-4">
+                  {gameState === 'result' ? t.result.cleared : t.result.gameover}
+                </h2>
+
+                <div className="space-y-2 bg-slate-950/60 p-4 rounded-xl border border-slate-800/80 mb-6 text-sm">
+                  <div className="flex justify-between text-slate-400">
+                    <span>{t.result.finalScore}</span>
+                    <span className="font-bold text-cyan-300">{stats.score.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between text-slate-400">
+                    <span>{t.result.maxCombo}</span>
+                    <span className="font-bold text-yellow-300">{stats.maxCombo}</span>
+                  </div>
+                  <div className="flex justify-between text-slate-400">
+                    <span>{t.result.accuracy}</span>
+                    <span className="font-bold text-emerald-300">{accuracy}%</span>
+                  </div>
+                  <div className="flex justify-between text-slate-400 border-t border-slate-800 pt-2">
+                    <span>{t.result.perfectCount} / {t.result.goodCount} / {t.result.missCount}</span>
+                    <span>{stats.perfect} / {stats.good} / {stats.miss}</span>
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={startGame}
+                    className="flex-1 py-3 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold rounded-xl transition"
+                  >
+                    {t.result.retryBtn}
+                  </button>
+                  <button
+                    onClick={() => { setGameState('idle'); onBackToMenu(); }}
+                    className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl transition"
+                  >
+                    {t.result.menuBtn}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // ==========================================
+    // 5. 모드 2: 아날로그 펄스 (Analog Pulse)
+    // ==========================================
+    function AnalogPulseMode({ song, chartNotes, audioBuffer, language, syncOffset, sfxEnabled, onBackToMenu }) {
+      const t = TEXT[language];
+      const countdownTimerRef = useRef(null);
+      const animFrameRef = useRef(null);
+
+      const [gameState, setGameState] = useState('idle');
+      const [countdown, setCountdown] = useState(3);
+      const [stats, setStats] = useState({ score: 0, combo: 0, maxCombo: 0, perfect: 0, good: 0, miss: 0 });
+      const [judgment, setJudgment] = useState(null);
+
+      const notesRef = useRef([]);
+      const startTimeRef = useRef(0);
+      const statsRef = useRef({ score: 0, combo: 0, maxCombo: 0, perfect: 0, good: 0, miss: 0 });
+      const progressRef = useRef(0);
+      const [, forceUpdate] = useState({});
+
+      useEffect(() => {
+        notesRef.current = chartNotes.map(n => ({ ...n, hit: false }));
+      }, [chartNotes]);
+
+      useEffect(() => {
+        return () => {
+          if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
+          if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+          stopMusicTrack();
+        };
+      }, []);
+
+      const startGame = useCallback(() => {
+        if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
+        if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+        stopMusicTrack();
+
+        notesRef.current = chartNotes.map(n => ({ ...n, hit: false }));
+        statsRef.current = { score: 0, combo: 0, maxCombo: 0, perfect: 0, good: 0, miss: 0 };
+        setStats(statsRef.current);
+        setJudgment(null);
+
+        const ctx = getAudioContext();
+        setGameState('countdown');
+        setCountdown(3);
+
+        let count = 3;
+        const musicStartWhen = ctx.currentTime + 2.1;
+        startTimeRef.current = musicStartWhen;
+        startMusicTrack(audioBuffer, musicStartWhen);
+
+        countdownTimerRef.current = setInterval(() => {
+          count--;
+          if (count > 0) {
+            setCountdown(count);
+          } else {
+            clearInterval(countdownTimerRef.current);
+            countdownTimerRef.current = null;
+            setGameState('playing');
+          }
+        }, 700);
+      }, [chartNotes, audioBuffer]);
+
+      const handleHit = useCallback((side) => {
+        if (gameState !== 'playing') return;
+        const ctx = getAudioContext();
+        const rawElapsed = ctx.currentTime - startTimeRef.current;
+        const currentElapsed = rawElapsed - (syncOffset / 1000);
+
+        const validLanes = side === 'left' ? [0, 1] : [2, 3];
+        const target = notesRef.current.find(n => !n.hit && validLanes.includes(n.lane) && Math.abs(n.time - currentElapsed) < 0.18);
+
+        if (target) {
+          target.hit = true;
+          const diff = Math.abs(target.time - currentElapsed);
+          const isPerfect = diff < 0.06;
+          if (sfxEnabled) playClickSfx(isPerfect);
+          triggerHaptic(isPerfect ? 30 : 15);
+
+          statsRef.current.score += isPerfect ? 1000 : 600;
+          statsRef.current.combo++;
+          if (statsRef.current.combo > statsRef.current.maxCombo) {
+            statsRef.current.maxCombo = statsRef.current.combo;
+          }
+          if (isPerfect) statsRef.current.perfect++;
+          else statsRef.current.good++;
+
+          setJudgment(isPerfect ? 'PERFECT' : 'GOOD');
+          setStats({ ...statsRef.current });
+        }
+      }, [gameState, syncOffset, sfxEnabled]);
+
+      useEffect(() => {
+        const handleKeyDown = (e) => {
+          if (e.key === 'a' || e.key === 'A') handleHit('left');
+          else if (e.key === 'd' || e.key === 'D') handleHit('right');
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+      }, [handleHit]);
+
+      useEffect(() => {
+        if (gameState !== 'playing' && gameState !== 'countdown') return;
+        const ctx = getAudioContext();
+        const totalSongDuration = audioBuffer ? audioBuffer.duration : (song.duration || 30);
+
+        const loop = () => {
+          const rawElapsed = ctx.currentTime - startTimeRef.current;
+          const currentElapsed = rawElapsed - (syncOffset / 1000);
+          progressRef.current = currentElapsed;
+
+          if (gameState === 'playing') {
+            for (let i = 0; i < notesRef.current.length; i++) {
+              const n = notesRef.current[i];
+              if (!n.hit && currentElapsed - n.time > 0.16) {
+                n.hit = true;
+                statsRef.current.combo = 0;
+                statsRef.current.miss++;
+                setJudgment('MISS');
+                setStats({ ...statsRef.current });
+              }
+            }
+
+            if (currentElapsed > totalSongDuration + 0.5) {
+              stopMusicTrack();
+              setGameState('result');
+              return;
+            }
+          }
+
+          forceUpdate({});
+          animFrameRef.current = requestAnimationFrame(loop);
+        };
+        animFrameRef.current = requestAnimationFrame(loop);
+        return () => cancelAnimationFrame(animFrameRef.current);
+      }, [gameState, song, audioBuffer, syncOffset]);
+
+      const totalJudged = stats.perfect + stats.good + stats.miss;
+      const accuracy = totalJudged > 0 ? Math.round(((stats.perfect + stats.good * 0.6) / totalJudged) * 100) : 100;
+      const rank = calculateGrade(accuracy);
+
+      return (
+        <div className="relative w-full max-w-4xl mx-auto flex flex-col items-center">
+          <div className="w-full flex justify-between items-center px-4 py-2 bg-slate-900/80 border border-slate-800 rounded-t-xl text-sm">
+            <div><span className="text-slate-400">{t.hud.score}: </span><span className="font-bold text-cyan-400 text-lg">{stats.score}</span></div>
+            <div><span className="text-slate-400">{t.hud.combo}: </span><span className="font-bold text-yellow-400 text-lg">{stats.combo}</span></div>
+            <div><span className="text-slate-400">{t.hud.accuracy}: </span><span className="font-bold text-emerald-400">{accuracy}%</span></div>
+          </div>
+
+          <div 
+            className="relative w-full h-80 bg-slate-950 border-x border-b border-slate-800 rounded-b-xl overflow-hidden select-none"
+            style={{ touchAction: 'none' }}
+            onPointerDown={gameState === 'idle' ? startGame : undefined}
+          >
+            <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-1 bg-cyan-500 shadow-[0_0_15px_#06b6d4] z-10" />
+
+            <div className="absolute inset-0 flex">
+              <div 
+                className="w-1/2 h-full border-r border-slate-800/60 relative cursor-pointer active:bg-cyan-950/20"
+                onPointerDown={() => handleHit('left')}
+              >
+                <span className="absolute bottom-4 left-4 text-xs font-mono text-slate-500">A / LEFT</span>
+                {notesRef.current.map(n => {
+                  if (n.hit || ![0, 1].includes(n.lane)) return null;
+                  const diff = n.time - progressRef.current;
+                  if (diff < -0.1 || diff > 1.8) return null;
+                  const pos = Math.max(0, Math.min(100, (1 - diff / 1.8) * 100));
+                  return (
+                    <div 
+                      key={n.id}
+                      className="absolute top-1/2 -translate-y-1/2 w-3 h-20 bg-rose-500 rounded-full shadow-[0_0_10px_#f43f5e]"
+                      style={{ right: `${100 - pos}%` }}
+                    />
+                  );
+                })}
+              </div>
+
+              <div 
+                className="w-1/2 h-full relative cursor-pointer active:bg-cyan-950/20"
+                onPointerDown={() => handleHit('right')}
+              >
+                <span className="absolute bottom-4 right-4 text-xs font-mono text-slate-500">D / RIGHT</span>
+                {notesRef.current.map(n => {
+                  if (n.hit || ![2, 3].includes(n.lane)) return null;
+                  const diff = n.time - progressRef.current;
+                  if (diff < -0.1 || diff > 1.8) return null;
+                  const pos = Math.max(0, Math.min(100, (1 - diff / 1.8) * 100));
+                  return (
+                    <div 
+                      key={n.id}
+                      className="absolute top-1/2 -translate-y-1/2 w-3 h-20 bg-blue-500 rounded-full shadow-[0_0_10px_#3b82f6]"
+                      style={{ left: `${100 - pos}%` }}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+
+            {judgment && gameState === 'playing' && (
+              <div className="absolute top-6 left-1/2 -translate-x-1/2 pointer-events-none z-20">
+                <span className="text-2xl font-black italic tracking-widest text-cyan-300 drop-shadow-[0_0_12px_#22d3ee]">
+                  {judgment}
+                </span>
+              </div>
+            )}
+
+            {gameState === 'countdown' && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 backdrop-blur-sm z-30 pointer-events-none">
+                <span className="text-7xl font-black text-cyan-400 animate-ping">{countdown}</span>
+                <span className="mt-4 text-sm font-semibold tracking-widest text-slate-300">{t.hud.ready}</span>
+              </div>
+            )}
+
+            {gameState === 'idle' && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm z-30">
+                <div className="text-cyan-400 text-4xl mb-3">⚡</div>
+                <h3 className="text-xl font-bold text-white mb-2">{t.modes.analog.name}</h3>
+                <p className="text-slate-400 text-sm mb-5 text-center max-w-sm">{t.modes.analog.desc}</p>
+                <button
+                  type="button"
+                  className="px-8 py-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 text-slate-950 font-black rounded-full shadow-lg transition transform hover:scale-105"
+                >
+                  {t.library.playBtn}
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="w-full mt-2 flex justify-between items-center text-xs text-slate-400 px-2">
+            <span>🎮 {t.controls.analogHelp}</span>
+            <span>⏱️ Sync: {syncOffset}ms</span>
+          </div>
+
+          {(gameState === 'result' || gameState === 'gameover') && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
+              <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 text-center shadow-2xl">
+                <div className="text-5xl font-black text-cyan-400 mb-2">{rank}</div>
+                <h2 className="text-2xl font-bold text-white mb-4">{t.result.cleared}</h2>
+                <div className="space-y-2 bg-slate-950/60 p-4 rounded-xl border border-slate-800/80 mb-6 text-sm">
+                  <div className="flex justify-between text-slate-400"><span>{t.result.finalScore}</span><span className="font-bold text-cyan-300">{stats.score}</span></div>
+                  <div className="flex justify-between text-slate-400"><span>{t.result.maxCombo}</span><span className="font-bold text-yellow-300">{stats.maxCombo}</span></div>
+                  <div className="flex justify-between text-slate-400"><span>{t.result.accuracy}</span><span className="font-bold text-emerald-300">{accuracy}%</span></div>
+                </div>
+                <div className="flex gap-3">
+                  <button onClick={startGame} className="flex-1 py-3 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold rounded-xl transition">{t.result.retryBtn}</button>
+                  <button onClick={() => { setGameState('idle'); onBackToMenu(); }} className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl transition">{t.result.menuBtn}</button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // ==========================================
+    // 6. 모드 3: 비트 대시 (Beat Dash)
+    // ==========================================
+    function BeatDashMode({ song, chartNotes, audioBuffer, language, syncOffset, sfxEnabled, onBackToMenu }) {
+      const t = TEXT[language];
+      const countdownTimerRef = useRef(null);
+      const animFrameRef = useRef(null);
+
+      const [gameState, setGameState] = useState('idle');
+      const [countdown, setCountdown] = useState(3);
+      const [stats, setStats] = useState({ score: 0, combo: 0, maxCombo: 0, perfect: 0, good: 0, miss: 0 });
+      const [judgment, setJudgment] = useState(null);
+
+      const notesRef = useRef([]);
+      const startTimeRef = useRef(0);
+      const statsRef = useRef({ score: 0, combo: 0, maxCombo: 0, perfect: 0, good: 0, miss: 0 });
+      const progressRef = useRef(0);
+      const [, forceUpdate] = useState({});
+
+      useEffect(() => {
+        notesRef.current = chartNotes.map(n => ({ ...n, hit: false }));
+      }, [chartNotes]);
+
+      useEffect(() => {
+        return () => {
+          if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
+          if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+          stopMusicTrack();
+        };
+      }, []);
+
+      const startGame = useCallback(() => {
+        if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
+        if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+        stopMusicTrack();
+
+        notesRef.current = chartNotes.map(n => ({ ...n, hit: false }));
+        statsRef.current = { score: 0, combo: 0, maxCombo: 0, perfect: 0, good: 0, miss: 0 };
+        setStats(statsRef.current);
+        setJudgment(null);
+
+        const ctx = getAudioContext();
+        setGameState('countdown');
+        setCountdown(3);
+
+        let count = 3;
+        const musicStartWhen = ctx.currentTime + 2.1;
+        startTimeRef.current = musicStartWhen;
+        startMusicTrack(audioBuffer, musicStartWhen);
+
+        countdownTimerRef.current = setInterval(() => {
+          count--;
+          if (count > 0) {
+            setCountdown(count);
+          } else {
+            clearInterval(countdownTimerRef.current);
+            countdownTimerRef.current = null;
+            setGameState('playing');
+          }
+        }, 700);
+      }, [chartNotes, audioBuffer]);
+
+      const handleLaneHit = useCallback((lane) => {
+        if (gameState !== 'playing') return;
+        const ctx = getAudioContext();
+        const rawElapsed = ctx.currentTime - startTimeRef.current;
+        const currentElapsed = rawElapsed - (syncOffset / 1000);
+
+        const target = notesRef.current.find(n => !n.hit && (n.lane % 2 === lane) && Math.abs(n.time - currentElapsed) < 0.18);
+
+        if (target) {
+          target.hit = true;
+          const diff = Math.abs(target.time - currentElapsed);
+          const isPerfect = diff < 0.06;
+          if (sfxEnabled) playClickSfx(isPerfect);
+          triggerHaptic(isPerfect ? 30 : 15);
+
+          statsRef.current.score += isPerfect ? 1000 : 600;
+          statsRef.current.combo++;
+          if (statsRef.current.combo > statsRef.current.maxCombo) {
+            statsRef.current.maxCombo = statsRef.current.combo;
+          }
+          if (isPerfect) statsRef.current.perfect++;
+          else statsRef.current.good++;
+
+          setJudgment(isPerfect ? 'PERFECT' : 'GOOD');
+          setStats({ ...statsRef.current });
+        }
+      }, [gameState, syncOffset, sfxEnabled]);
+
+      useEffect(() => {
+        const handleKeyDown = (e) => {
+          if (e.key === 'w' || e.key === 'ArrowUp') handleLaneHit(0);
+          else if (e.key === 's' || e.key === 'ArrowDown') handleLaneHit(1);
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+      }, [handleLaneHit]);
+
+      useEffect(() => {
+        if (gameState !== 'playing' && gameState !== 'countdown') return;
+        const ctx = getAudioContext();
+        const totalSongDuration = audioBuffer ? audioBuffer.duration : (song.duration || 30);
+
+        const loop = () => {
+          const rawElapsed = ctx.currentTime - startTimeRef.current;
+          const currentElapsed = rawElapsed - (syncOffset / 1000);
+          progressRef.current = currentElapsed;
+
+          if (gameState === 'playing') {
+            for (let i = 0; i < notesRef.current.length; i++) {
+              const n = notesRef.current[i];
+              if (!n.hit && currentElapsed - n.time > 0.16) {
+                n.hit = true;
+                statsRef.current.combo = 0;
+                statsRef.current.miss++;
+                setJudgment('MISS');
+                setStats({ ...statsRef.current });
+              }
+            }
+
+            if (currentElapsed > totalSongDuration + 0.5) {
+              stopMusicTrack();
+              setGameState('result');
+              return;
+            }
+          }
+
+          forceUpdate({});
+          animFrameRef.current = requestAnimationFrame(loop);
+        };
+        animFrameRef.current = requestAnimationFrame(loop);
+        return () => cancelAnimationFrame(animFrameRef.current);
+      }, [gameState, song, audioBuffer, syncOffset]);
+
+      const totalJudged = stats.perfect + stats.good + stats.miss;
+      const accuracy = totalJudged > 0 ? Math.round(((stats.perfect + stats.good * 0.6) / totalJudged) * 100) : 100;
+      const rank = calculateGrade(accuracy);
+
+      return (
+        <div className="relative w-full max-w-4xl mx-auto flex flex-col items-center">
+          <div className="w-full flex justify-between items-center px-4 py-2 bg-slate-900/80 border border-slate-800 rounded-t-xl text-sm">
+            <div><span className="text-slate-400">{t.hud.score}: </span><span className="font-bold text-cyan-400 text-lg">{stats.score}</span></div>
+            <div><span className="text-slate-400">{t.hud.combo}: </span><span className="font-bold text-yellow-400 text-lg">{stats.combo}</span></div>
+            <div><span className="text-slate-400">{t.hud.accuracy}: </span><span className="font-bold text-emerald-400">{accuracy}%</span></div>
+          </div>
+
+          <div 
+            className="relative w-full h-80 bg-slate-950 border-x border-b border-slate-800 rounded-b-xl overflow-hidden select-none"
+            style={{ touchAction: 'none' }}
+            onPointerDown={gameState === 'idle' ? startGame : undefined}
+          >
+            <div className="absolute inset-0 flex flex-col">
+              <div 
+                className="w-full h-1/2 border-b border-slate-800/80 relative cursor-pointer active:bg-cyan-950/20"
+                onPointerDown={() => handleLaneHit(0)}
+              >
+                <div className="absolute top-2 left-4 text-xs font-mono text-cyan-400/80">TOP LANE [W / ↑]</div>
+                <div className="absolute top-0 bottom-0 left-24 w-1 bg-cyan-400/80 shadow-[0_0_10px_#22d3ee]" />
+                {notesRef.current.map(n => {
+                  if (n.hit || (n.lane % 2 !== 0)) return null;
+                  const diff = n.time - progressRef.current;
+                  if (diff < -0.1 || diff > 1.8) return null;
+                  const pos = Math.max(0, Math.min(100, (diff / 1.8) * 100));
+                  return (
+                    <div 
+                      key={n.id}
+                      className="absolute top-1/2 -translate-y-1/2 w-6 h-12 bg-cyan-400 rounded-md shadow-[0_0_12px_#22d3ee]"
+                      style={{ left: `calc(6rem + ${pos * 0.75}%)` }}
+                    />
+                  );
+                })}
+              </div>
+
+              <div 
+                className="w-full h-1/2 relative cursor-pointer active:bg-cyan-950/20"
+                onPointerDown={() => handleLaneHit(1)}
+              >
+                <div className="absolute top-2 left-4 text-xs font-mono text-yellow-400/80">BOTTOM LANE [S / ↓]</div>
+                <div className="absolute top-0 bottom-0 left-24 w-1 bg-yellow-400/80 shadow-[0_0_10px_#facc15]" />
+                {notesRef.current.map(n => {
+                  if (n.hit || (n.lane % 2 !== 1)) return null;
+                  const diff = n.time - progressRef.current;
+                  if (diff < -0.1 || diff > 1.8) return null;
+                  const pos = Math.max(0, Math.min(100, (diff / 1.8) * 100));
+                  return (
+                    <div 
+                      key={n.id}
+                      className="absolute top-1/2 -translate-y-1/2 w-6 h-12 bg-yellow-400 rounded-md shadow-[0_0_12px_#facc15]"
+                      style={{ left: `calc(6rem + ${pos * 0.75}%)` }}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+
+            {judgment && gameState === 'playing' && (
+              <div className="absolute top-6 left-1/2 -translate-x-1/2 pointer-events-none z-20">
+                <span className="text-2xl font-black italic tracking-widest text-cyan-300 drop-shadow-[0_0_12px_#22d3ee]">
+                  {judgment}
+                </span>
+              </div>
+            )}
+
+            {gameState === 'countdown' && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 backdrop-blur-sm z-30 pointer-events-none">
+                <span className="text-7xl font-black text-cyan-400 animate-ping">{countdown}</span>
+                <span className="mt-4 text-sm font-semibold tracking-widest text-slate-300">{t.hud.ready}</span>
+              </div>
+            )}
+
+            {gameState === 'idle' && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm z-30">
+                <div className="text-yellow-400 text-4xl mb-3">⚡</div>
+                <h3 className="text-xl font-bold text-white mb-2">{t.modes.beatdash.name}</h3>
+                <p className="text-slate-400 text-sm mb-5 text-center max-w-sm">{t.modes.beatdash.desc}</p>
+                <button
+                  type="button"
+                  className="px-8 py-3 bg-gradient-to-r from-yellow-500 to-amber-600 hover:from-yellow-400 text-slate-950 font-black rounded-full shadow-lg transition transform hover:scale-105"
+                >
+                  {t.library.playBtn}
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="w-full mt-2 flex justify-between items-center text-xs text-slate-400 px-2">
+            <span>🎮 {t.controls.beatdashHelp}</span>
+            <span>⏱️ Sync: {syncOffset}ms</span>
+          </div>
+
+          {(gameState === 'result' || gameState === 'gameover') && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
+              <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 text-center shadow-2xl">
+                <div className="text-5xl font-black text-cyan-400 mb-2">{rank}</div>
+                <h2 className="text-2xl font-bold text-white mb-4">{t.result.cleared}</h2>
+                <div className="space-y-2 bg-slate-950/60 p-4 rounded-xl border border-slate-800/80 mb-6 text-sm">
+                  <div className="flex justify-between text-slate-400"><span>{t.result.finalScore}</span><span className="font-bold text-cyan-300">{stats.score}</span></div>
+                  <div className="flex justify-between text-slate-400"><span>{t.result.maxCombo}</span><span className="font-bold text-yellow-300">{stats.maxCombo}</span></div>
+                  <div className="flex justify-between text-slate-400"><span>{t.result.accuracy}</span><span className="font-bold text-emerald-300">{accuracy}%</span></div>
+                </div>
+                <div className="flex gap-3">
+                  <button onClick={startGame} className="flex-1 py-3 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold rounded-xl transition">{t.result.retryBtn}</button>
+                  <button onClick={() => { setGameState('idle'); onBackToMenu(); }} className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl transition">{t.result.menuBtn}</button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // ==========================================
+    // 7. 모드 4: 매직 타일 (Classic Magic Tiles)
+    // ==========================================
+    function ClassicTilesMode({ song, chartNotes, audioBuffer, language, syncOffset, sfxEnabled, onBackToMenu }) {
+      const t = TEXT[language];
+      const canvasRef = useRef(null);
+      const countdownTimerRef = useRef(null);
+      const animFrameRef = useRef(null);
+
+      const [gameState, setGameState] = useState('idle');
+      const [countdown, setCountdown] = useState(3);
+      const [stats, setStats] = useState({ score: 0, combo: 0, maxCombo: 0, perfect: 0, good: 0, miss: 0 });
+      const [judgment, setJudgment] = useState(null);
+
+      const notesRef = useRef([]);
+      const startTimeRef = useRef(0);
+      const statsRef = useRef({ score: 0, combo: 0, maxCombo: 0, perfect: 0, good: 0, miss: 0 });
+
+      useEffect(() => {
+        notesRef.current = chartNotes.map(n => ({ ...n, hit: false }));
+      }, [chartNotes]);
+
+      useEffect(() => {
+        return () => {
+          if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
+          if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+          stopMusicTrack();
+        };
+      }, []);
+
+      const startGame = useCallback(() => {
+        if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
+        if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+        stopMusicTrack();
+
+        notesRef.current = chartNotes.map(n => ({ ...n, hit: false }));
+        statsRef.current = { score: 0, combo: 0, maxCombo: 0, perfect: 0, good: 0, miss: 0 };
+        setStats(statsRef.current);
+        setJudgment(null);
+
+        const ctx = getAudioContext();
+        setGameState('countdown');
+        setCountdown(3);
+
+        let count = 3;
+        const musicStartWhen = ctx.currentTime + 2.1;
+        startTimeRef.current = musicStartWhen;
+        startMusicTrack(audioBuffer, musicStartWhen);
+
+        countdownTimerRef.current = setInterval(() => {
+          count--;
+          if (count > 0) {
+            setCountdown(count);
+          } else {
+            clearInterval(countdownTimerRef.current);
+            countdownTimerRef.current = null;
+            setGameState('playing');
+          }
+        }, 700);
+      }, [chartNotes, audioBuffer]);
+
+      const handleLaneTap = useCallback((laneIndex) => {
+        if (gameState !== 'playing') return;
+        const ctx = getAudioContext();
+        const rawElapsed = ctx.currentTime - startTimeRef.current;
+        const currentElapsed = rawElapsed - (syncOffset / 1000);
+
+        const candidate = notesRef.current.find(n => !n.hit && n.lane === laneIndex && Math.abs(n.time - currentElapsed) < 0.2);
+
+        if (candidate) {
+          candidate.hit = true;
+          const diff = Math.abs(candidate.time - currentElapsed);
+          const isPerfect = diff < 0.07;
+          if (sfxEnabled) playClickSfx(isPerfect);
+          triggerHaptic(isPerfect ? 30 : 15);
+
+          statsRef.current.score += isPerfect ? 1000 : 600;
+          statsRef.current.combo++;
+          if (statsRef.current.combo > statsRef.current.maxCombo) {
+            statsRef.current.maxCombo = statsRef.current.combo;
+          }
+          if (isPerfect) statsRef.current.perfect++;
+          else statsRef.current.good++;
+
+          setJudgment(isPerfect ? 'PERFECT' : 'GOOD');
+          setStats({ ...statsRef.current });
+        }
+      }, [gameState, syncOffset, sfxEnabled]);
+
+      useEffect(() => {
+        const handleKeyDown = (e) => {
+          const map = { d: 0, D: 0, f: 1, F: 1, j: 2, J: 2, k: 3, K: 3 };
+          if (map[e.key] !== undefined) {
+            handleLaneTap(map[e.key]);
+          }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+      }, [handleLaneTap]);
+
+      useEffect(() => {
+        if (gameState !== 'playing' && gameState !== 'countdown') return;
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx2d = canvas.getContext('2d');
+        const audioCtx = getAudioContext();
+        const totalSongDuration = audioBuffer ? audioBuffer.duration : (song.duration || 30);
+
+        const renderLoop = () => {
+          const rawElapsed = audioCtx.currentTime - startTimeRef.current;
+          const currentElapsed = rawElapsed - (syncOffset / 1000);
+
+          const w = canvas.width;
+          const h = canvas.height;
+          const laneWidth = w / 4;
+          const hitLineY = h * 0.82;
+
+          ctx2d.clearRect(0, 0, w, h);
+
+          for (let i = 0; i < 4; i++) {
+            ctx2d.strokeStyle = '#1e293b';
+            ctx2d.lineWidth = 1;
+            ctx2d.beginPath();
+            ctx2d.moveTo(i * laneWidth, 0);
+            ctx2d.lineTo(i * laneWidth, h);
+            ctx2d.stroke();
+          }
+
+          ctx2d.shadowBlur = 10;
+          ctx2d.shadowColor = '#06b6d4';
+          ctx2d.strokeStyle = '#22d3ee';
+          ctx2d.lineWidth = 3;
+          ctx2d.beginPath();
+          ctx2d.moveTo(0, hitLineY);
+          ctx2d.lineTo(w, hitLineY);
+          ctx2d.stroke();
+          ctx2d.shadowBlur = 0;
+
+          const leadTime = 1.5;
+          const tileHeight = h * 0.18;
+          const notes = notesRef.current;
+
+          for (let i = 0; i < notes.length; i++) {
+            const note = notes[i];
+            if (note.hit) continue;
+
+            const timeDiff = note.time - currentElapsed;
+            const y = hitLineY - tileHeight - (timeDiff / leadTime) * hitLineY;
+            const x = note.lane * laneWidth + 4;
+            const tileW = laneWidth - 8;
+
+            if (y > -tileHeight && y < h) {
+              ctx2d.fillStyle = '#0f172a';
+              ctx2d.fillRect(x, y, tileW, tileHeight);
+
+              ctx2d.strokeStyle = '#38bdf8';
+              ctx2d.lineWidth = 2;
+              ctx2d.strokeRect(x, y, tileW, tileHeight);
+
+              const grad = ctx2d.createLinearGradient(x, y, x, y + tileHeight);
+              grad.addColorStop(0, 'rgba(56, 189, 248, 0.4)');
+              grad.addColorStop(1, 'rgba(14, 165, 233, 0.05)');
+              ctx2d.fillStyle = grad;
+              ctx2d.fillRect(x + 2, y + 2, tileW - 4, tileHeight - 4);
+            }
+
+            if (gameState === 'playing' && timeDiff < -0.18 && !note.hit) {
+              note.hit = true;
+              statsRef.current.combo = 0;
+              statsRef.current.miss++;
+              setJudgment('MISS');
+              setStats({ ...statsRef.current });
+            }
+          }
+
+          if (gameState === 'playing' && currentElapsed > totalSongDuration + 0.5) {
+            stopMusicTrack();
+            setGameState('result');
+            return;
+          }
+
+          animFrameRef.current = requestAnimationFrame(renderLoop);
+        };
+
+        animFrameRef.current = requestAnimationFrame(renderLoop);
+        return () => cancelAnimationFrame(animFrameRef.current);
+      }, [gameState, song, audioBuffer, syncOffset]);
+
+      // 3번 요구사항: onPointerDown 멀티터치 처리
+      const handleCanvasPointerDown = (e) => {
+        if (gameState === 'idle') {
+          startGame();
+          return;
+        }
+        if (gameState !== 'playing') return;
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const rect = canvas.getBoundingClientRect();
+        const clientX = e.clientX;
+        const laneIdx = Math.floor(((clientX - rect.left) / rect.width) * 4);
+        handleLaneTap(Math.max(0, Math.min(3, laneIdx)));
+      };
+
+      const totalJudged = stats.perfect + stats.good + stats.miss;
+      const accuracy = totalJudged > 0 ? Math.round(((stats.perfect + stats.good * 0.6) / totalJudged) * 100) : 100;
+      const rank = calculateGrade(accuracy);
+
+      return (
+        <div className="relative w-full max-w-md mx-auto flex flex-col items-center">
+          <div className="w-full flex justify-between items-center px-4 py-2 bg-slate-900/80 border border-slate-800 rounded-t-xl text-sm">
+            <div><span className="text-slate-400">{t.hud.score}: </span><span className="font-bold text-cyan-400 text-lg">{stats.score}</span></div>
+            <div><span className="text-slate-400">{t.hud.combo}: </span><span className="font-bold text-yellow-400 text-lg">{stats.combo}</span></div>
+            <div><span className="text-slate-400">{t.hud.accuracy}: </span><span className="font-bold text-emerald-400">{accuracy}%</span></div>
+          </div>
+
+          <div 
+            className="relative w-full h-[460px] bg-slate-950 border-x border-b border-slate-800 rounded-b-xl overflow-hidden cursor-pointer select-none"
+            style={{ touchAction: 'none' }}
+            onPointerDown={handleCanvasPointerDown}
+          >
+            <canvas ref={canvasRef} width={380} height={460} className="w-full h-full block" />
+
+            <div className="absolute bottom-2 inset-x-0 flex justify-around pointer-events-none text-xs font-mono text-slate-500">
+              <span>D</span><span>F</span><span>J</span><span>K</span>
+            </div>
+
+            {judgment && gameState === 'playing' && (
+              <div className="absolute top-8 left-1/2 -translate-x-1/2 pointer-events-none z-20">
+                <span className="text-2xl font-black italic tracking-widest text-cyan-300 drop-shadow-[0_0_12px_#22d3ee]">
+                  {judgment}
+                </span>
+              </div>
+            )}
+
+            {gameState === 'countdown' && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 backdrop-blur-sm z-30 pointer-events-none">
+                <span className="text-7xl font-black text-cyan-400 animate-ping">{countdown}</span>
+                <span className="mt-4 text-sm font-semibold tracking-widest text-slate-300">{t.hud.ready}</span>
+              </div>
+            )}
+
+            {gameState === 'idle' && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm z-30">
+                <div className="text-cyan-400 text-4xl mb-3">🎹</div>
+                <h3 className="text-xl font-bold text-white mb-2">{t.modes.tiles.name}</h3>
+                <p className="text-slate-400 text-sm mb-5 text-center px-4">{t.modes.tiles.desc}</p>
+                <button
+                  type="button"
+                  className="px-8 py-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 text-slate-950 font-black rounded-full shadow-lg transition transform hover:scale-105"
+                >
+                  {t.library.playBtn}
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="w-full mt-2 flex justify-between items-center text-xs text-slate-400 px-2">
+            <span>🎮 {t.controls.tilesHelp}</span>
+            <span>⏱️ Sync: {syncOffset}ms</span>
+          </div>
+
+          {(gameState === 'result' || gameState === 'gameover') && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
+              <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 text-center shadow-2xl">
+                <div className="text-5xl font-black text-cyan-400 mb-2">{rank}</div>
+                <h2 className="text-2xl font-bold text-white mb-4">{t.result.cleared}</h2>
+                <div className="space-y-2 bg-slate-950/60 p-4 rounded-xl border border-slate-800/80 mb-6 text-sm">
+                  <div className="flex justify-between text-slate-400"><span>{t.result.finalScore}</span><span className="font-bold text-cyan-300">{stats.score}</span></div>
+                  <div className="flex justify-between text-slate-400"><span>{t.result.maxCombo}</span><span className="font-bold text-yellow-300">{stats.maxCombo}</span></div>
+                  <div className="flex justify-between text-slate-400"><span>{t.result.accuracy}</span><span className="font-bold text-emerald-300">{accuracy}%</span></div>
+                </div>
+                <div className="flex gap-3">
+                  <button onClick={startGame} className="flex-1 py-3 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold rounded-xl transition">{t.result.retryBtn}</button>
+                  <button onClick={() => { setGameState('idle'); onBackToMenu(); }} className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl transition">{t.result.menuBtn}</button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // ==========================================
+    // 8. 루트 앱 컴포넌트
+    // ==========================================
+    function App() {
+      // 6번 요구사항: localStorage 안전 헬퍼
+      const safeStorage = {
+        get: (key, fallback) => {
+          try {
+            const val = localStorage.getItem(key);
+            return val !== null ? val : fallback;
+          } catch (e) {
+            return fallback;
+          }
+        },
+        set: (key, val) => {
+          try {
+            localStorage.setItem(key, val);
+          } catch (e) {}
+        }
+      };
+
+      const [language, setLanguage] = useState(() => {
+        const saved = safeStorage.get('wavepulse_lang', null);
+        if (saved === 'kr' || saved === 'en') return saved;
+        return navigator.language && navigator.language.startsWith('ko') ? 'kr' : 'en';
+      });
+
+      const [syncOffset, setSyncOffset] = useState(() => {
+        const saved = safeStorage.get('wavepulse_sync', '0');
+        const parsed = parseInt(saved, 10);
+        return isNaN(parsed) ? 0 : parsed;
+      });
+
+      const [difficulty, setDifficulty] = useState(() => {
+        return safeStorage.get('wavepulse_diff', 'normal');
+      });
+
+      const [sfxEnabled, setSfxEnabled] = useState(() => {
+        const saved = safeStorage.get('wavepulse_sfx', 'true');
+        return saved === 'true';
+      });
+
+      const [currentMode, setCurrentMode] = useState('surfer');
+      const [selectedSong, setSelectedSong] = useState(PRESET_SONGS[0]);
+      const [customSong, setCustomSong] = useState(null);
+
+      const [currentBuffer, setCurrentBuffer] = useState(null);
+      const [chartNotes, setChartNotes] = useState([]);
+      const [waveformPeaks, setWaveformPeaks] = useState([]);
+      const [isLoadingTrack, setIsLoadingTrack] = useState(false);
+
+      const t = TEXT[language];
+
+      const changeLanguage = (lang) => {
+        setLanguage(lang);
+        safeStorage.set('wavepulse_lang', lang);
+      };
+
+      const handleSyncChange = (val) => {
+        setSyncOffset(val);
+        safeStorage.set('wavepulse_sync', val.toString());
+      };
+
+      const handleDifficultyChange = (diff) => {
+        setDifficulty(diff);
+        safeStorage.set('wavepulse_diff', diff);
+      };
+
+      const handleSfxToggle = () => {
+        setSfxEnabled(prev => {
+          const next = !prev;
+          safeStorage.set('wavepulse_sfx', next.toString());
+          return next;
+        });
+      };
+
+      // 1번 & 2번: 곡 로드 및 audioBuffer.duration 기반 동적 계산
+      useEffect(() => {
+        let isCancelled = false;
+        const activeSong = customSong || selectedSong;
+
+        async function loadAndPrepare() {
+          setIsLoadingTrack(true);
+          try {
+            const buffer = await loadCurrentTrackBuffer(activeSong);
+            if (isCancelled) return;
+
+            const notes = analyzeAudioAndGenerateNotes(buffer, activeSong.id, difficulty);
+            const peaks = extractWaveformPeaks(buffer, 300);
+
+            setCurrentBuffer(buffer);
+            setChartNotes(notes);
+            setWaveformPeaks(peaks);
+          } catch (e) {
+            console.error("Track preparation failed:", e);
+          } finally {
+            if (!isCancelled) setIsLoadingTrack(false);
+          }
+        }
+
+        loadAndPrepare();
+        return () => { isCancelled = true; };
+      }, [selectedSong, customSong, difficulty]);
+
+      const handleFileUpload = async (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+
+        setIsLoadingTrack(true);
+        try {
+          const ctx = getAudioContext();
+          const arrayBuffer = await file.arrayBuffer();
+          const decoded = await ctx.decodeAudioData(arrayBuffer);
+
+          const newCustomSong = {
+            id: `custom_${Date.now()}`,
+            title: file.name.replace(/\.[^/.]+$/, ""),
+            titleEn: file.name.replace(/\.[^/.]+$/, ""),
+            artist: "Custom Audio",
+            bpm: 120,
+            duration: Math.floor(decoded.duration),
+            lyrics: []
+          };
+
+          currentDecodedBuffer = decoded;
+          currentDecodedSongId = newCustomSong.id;
+
+          setCustomSong(newCustomSong);
+        } catch (err) {
+          alert(language === 'kr' ? "오디오 파일 디코딩에 실패했습니다." : "Failed to decode audio file.");
+        } finally {
+          setIsLoadingTrack(false);
+        }
+      };
+
+      const activeSong = customSong || selectedSong;
+      // 2번: 로드된 오디오 버퍼가 있으면 그 실제 길이를 사용
+      const displayDuration = currentBuffer ? Math.floor(currentBuffer.duration) : (activeSong.duration || 30);
+
+      return (
+        <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100">
+          <header className="border-b border-slate-900 bg-slate-950/80 backdrop-blur-md sticky top-0 z-40">
+            <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center font-black text-slate-950 text-lg shadow-[0_0_15px_#06b6d4]">
+                  W
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-black text-lg tracking-wider text-white">{t.brand.title}</span>
+                    <span className="text-[10px] bg-cyan-500/20 text-cyan-400 font-bold px-1.5 py-0.5 rounded border border-cyan-500/30">
+                      {t.brand.badge}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 hidden sm:block">{t.brand.subtitle}</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => changeLanguage('kr')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition border ${
+                    language === 'kr' 
+                      ? 'bg-cyan-500/10 border-cyan-500 text-cyan-400 shadow-[0_0_10px_rgba(6,182,212,0.2)]' 
+                      : 'border-slate-800 text-slate-400 hover:bg-slate-900'
+                  }`}
+                >
+                  {t.nav.krBtn}
+                </button>
+                <button
+                  onClick={() => changeLanguage('en')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition border ${
+                    language === 'en' 
+                      ? 'bg-cyan-500/10 border-cyan-500 text-cyan-400 shadow-[0_0_10px_rgba(6,182,212,0.2)]' 
+                      : 'border-slate-800 text-slate-400 hover:bg-slate-900'
+                  }`}
+                >
+                  {t.nav.enBtn}
+                </button>
+              </div>
+            </div>
+          </header>
+
+          <main className="flex-1 max-w-6xl w-full mx-auto p-4 sm:p-6 space-y-6">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+              {[
+                { id: 'surfer', icon: '🏄', label: t.modes.surfer.name },
+                { id: 'analog', icon: '⚡', label: t.modes.analog.name },
+                { id: 'beatdash', icon: '🏃', label: t.modes.beatdash.name },
+                { id: 'tiles', icon: '🎹', label: t.modes.tiles.name }
+              ].map(m => (
+                <button
+                  key={m.id}
+                  onClick={() => { stopMusicTrack(); setCurrentMode(m.id); }}
+                  className={`p-3 rounded-xl border flex items-center justify-center gap-2 font-bold text-sm transition ${
+                    currentMode === m.id
+                      ? 'bg-cyan-500/10 border-cyan-500 text-cyan-300 shadow-[0_0_15px_rgba(6,182,212,0.15)]'
+                      : 'bg-slate-900/60 border-slate-800 text-slate-400 hover:bg-slate-800/80'
+                  }`}
+                >
+                  <span className="text-lg">{m.icon}</span>
+                  <span>{m.label}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="bg-slate-900/50 border border-slate-800/80 rounded-2xl p-4 sm:p-6 shadow-xl relative min-h-[380px] flex items-center justify-center">
+              {isLoadingTrack ? (
+                <div className="flex flex-col items-center gap-3 py-16">
+                  <div className="w-10 h-10 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin" />
+                  <p className="text-sm font-semibold text-cyan-400">{t.library.customLoading}</p>
+                </div>
+              ) : currentBuffer ? (
+                currentMode === 'surfer' ? (
+                  <SoundSurferMode
+                    song={activeSong}
+                    chartNotes={chartNotes}
+                    audioBuffer={currentBuffer}
+                    waveformPeaks={waveformPeaks}
+                    language={language}
+                    syncOffset={syncOffset}
+                    sfxEnabled={sfxEnabled}
+                    onBackToMenu={() => {}}
+                  />
+                ) : currentMode === 'analog' ? (
+                  <AnalogPulseMode
+                    song={activeSong}
+                    chartNotes={chartNotes}
+                    audioBuffer={currentBuffer}
+                    language={language}
+                    syncOffset={syncOffset}
+                    sfxEnabled={sfxEnabled}
+                    onBackToMenu={() => {}}
+                  />
+                ) : currentMode === 'beatdash' ? (
+                  <BeatDashMode
+                    song={activeSong}
+                    chartNotes={chartNotes}
+                    audioBuffer={currentBuffer}
+                    language={language}
+                    syncOffset={syncOffset}
+                    sfxEnabled={sfxEnabled}
+                    onBackToMenu={() => {}}
+                  />
+                ) : (
+                  <ClassicTilesMode
+                    song={activeSong}
+                    chartNotes={chartNotes}
+                    audioBuffer={currentBuffer}
+                    language={language}
+                    syncOffset={syncOffset}
+                    sfxEnabled={sfxEnabled}
+                    onBackToMenu={() => {}}
+                  />
+                )
+              ) : null}
+            </div>
+
+            {/* 설정 패널 */}
+            <div className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-5 space-y-4">
+              <h3 className="text-sm font-bold text-slate-300 flex items-center gap-2">
+                <span>⚙️</span> {t.settings.title}
+              </h3>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2">
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold text-slate-400 block">{t.settings.difficultyLabel}</label>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {['easy', 'normal', 'hard', 'expert'].map(diff => (
+                      <button
+                        key={diff}
+                        onClick={() => handleDifficultyChange(diff)}
+                        className={`py-2 text-xs font-bold rounded-lg border transition ${
+                          difficulty === diff
+                            ? 'bg-cyan-500/20 border-cyan-500 text-cyan-300'
+                            : 'bg-slate-950 border-slate-800 text-slate-400 hover:bg-slate-900'
+                        }`}
+                      >
+                        {t.difficulty[diff]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 5번: 싱크 안내 문구 수정 적용 */}
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-slate-400 font-semibold">{t.settings.syncLabel}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-bold text-cyan-400">{syncOffset > 0 ? `+${syncOffset}` : syncOffset} {t.settings.syncUnit}</span>
+                      <button
+                        onClick={() => handleSyncChange(0)}
+                        className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300"
+                      >
+                        {t.settings.syncReset}
+                      </button>
+                    </div>
+                  </div>
+                  <input
+                    type="range"
+                    min="-200"
+                    max="200"
+                    step="5"
+                    value={syncOffset}
+                    onChange={(e) => handleSyncChange(parseInt(e.target.value, 10))}
+                    className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-400"
+                  />
+                  <p className="text-[11px] text-slate-500">{t.settings.syncNotice}</p>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold text-slate-400 block">{t.settings.sfxLabel}</label>
+                  <button
+                    onClick={handleSfxToggle}
+                    className={`w-full py-2 text-xs font-bold rounded-lg border transition flex items-center justify-center gap-2 ${
+                      sfxEnabled
+                        ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400'
+                        : 'bg-slate-950 border-slate-800 text-slate-500 hover:bg-slate-900'
+                    }`}
+                  >
+                    <span>{sfxEnabled ? '🔊' : '🔇'}</span>
+                    <span>{sfxEnabled ? t.settings.sfxOn : t.settings.sfxOff}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* 곡 선택 보관함 & 파일 업로드 */}
+            <div className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-5 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <h3 className="text-sm font-bold text-slate-300 flex items-center gap-2">
+                  <span>🎵</span> {t.library.title}
+                </h3>
+                <label className="cursor-pointer px-4 py-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-slate-950 font-bold text-xs rounded-xl transition shadow flex items-center justify-center gap-2">
+                  <span>📂</span> {t.library.customBtn}
+                  <input type="file" accept="audio/*" onChange={handleFileUpload} className="hidden" />
+                </label>
+              </div>
+
+              {/* 1번: 원래 내 곡 4곡 목록 표시 */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                {PRESET_SONGS.map(song => {
+                  const isSelected = !customSong && selectedSong.id === song.id;
+                  const itemDuration = (isSelected && currentBuffer) ? Math.floor(currentBuffer.duration) : (song.duration || "--");
+                  return (
+                    <button
+                      key={song.id}
+                      onClick={() => {
+                        stopMusicTrack();
+                        setCustomSong(null);
+                        setSelectedSong(song);
+                      }}
+                      className={`p-4 rounded-xl border text-left transition flex flex-col justify-between ${
+                        isSelected
+                          ? 'bg-cyan-500/10 border-cyan-500/80 shadow-[0_0_15px_rgba(6,182,212,0.15)]'
+                          : 'bg-slate-950/60 border-slate-800 hover:border-slate-700'
+                      }`}
+                    >
+                      <div>
+                        <div className="font-bold text-sm text-white line-clamp-1">{language === 'kr' ? song.title : song.titleEn}</div>
+                        <div className="text-xs text-slate-400 mt-0.5">{song.artist}</div>
+                      </div>
+                      <div className="flex items-center justify-between mt-3 text-[11px] text-slate-500 font-mono">
+                        <span>{t.library.bpm}: {song.bpm}</span>
+                        <span>{itemDuration}{t.library.duration}</span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {customSong && (
+                <div className="p-3 bg-cyan-950/20 border border-cyan-500/50 rounded-xl flex items-center justify-between text-xs">
+                  <div>
+                    <span className="font-bold text-cyan-400">🔥 [CUSTOM] {customSong.title}</span>
+                    <span className="text-slate-400 ml-2">({displayDuration}초)</span>
+                  </div>
+                  <button
+                    onClick={() => setCustomSong(null)}
+                    className="text-slate-400 hover:text-rose-400"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+            </div>
+          </main>
+
+          <footer className="border-t border-slate-900 bg-slate-950/80 py-4 px-4 text-center text-xs text-slate-500">
+            {t.footer.info} · {t.footer.copyright}
+          </footer>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
